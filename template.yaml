@@ -1,0 +1,23 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Local-testing-only SAM template for the flow log ingestion Lambda.
+  Not used for the real deployment (that's handled entirely by Terraform
+  in terraform/) - this exists solely so `sam local invoke` can exercise
+  lambda/index.py against DynamoDB Local during local development.
+
+Resources:
+  FlowLogIngestionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: flow-log-ingestion-local
+      CodeUri: lambda/
+      Handler: index.handler
+      Runtime: python3.12
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          DYNAMODB_ENDPOINT_URL: http://host.docker.internal:8000
+          DYNAMODB_TABLE: vpc_flow_log_edges
+          TTL_SECONDS: "2592000"

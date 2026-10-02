@@ -1,0 +1,28 @@
+# Copy this file to terraform.tfvars and fill in real values.
+
+aws_region = "us-east-1"
+
+# VPCs to enable VPC Flow Logs for (traffic_type = ALL).
+vpc_ids = [
+  "vpc-0123456789abcdef0",
+]
+
+# REQUIRED - no default. Restrict this to your own IP/office range, e.g.
+# ["203.0.113.4/32"]. Never leave this as 0.0.0.0/0 in a real deployment -
+# the visualization app has no login of its own and would otherwise expose
+# your network's traffic graph to the entire internet.
+allowed_cidr_blocks = [
+  "203.0.113.4/32",
+]
+
+# 60 or 600 seconds. 60s keeps data fresh enough to match the web UI's 10s
+# auto-refresh; 600s trades freshness for lower CloudWatch Logs volume/cost.
+flow_log_aggregation_interval = 60
+
+dynamodb_table_name = "vpc_flow_log_edges"
+edge_ttl_days        = 30
+
+app_vpc_cidr = "10.90.0.0/16"
+app_port     = 80
+
+project_name = "flowlog-viz"

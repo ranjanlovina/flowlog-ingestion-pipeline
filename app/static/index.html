@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>VPC Flow Log Network Graph</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.9/standalone/umd/vis-network.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1419;
+    --panel: #1a2029;
+    --border: #2a323d;
+    --text: #e6e9ec;
+    --muted: #8b96a3;
+    --accent: #4da3ff;
+  }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  #topbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+  }
+  #topbar h1 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0;
+    color: var(--text);
+  }
+  #topbar label {
+    font-size: 13px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #status {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  #network {
+    width: 100%;
+    height: calc(100vh - 46px);
+  }
+</style>
+</head>
+<body>
+  <div id="topbar">
+    <h1>VPC Flow Log Network Graph</h1>
+    <label><input type="checkbox" id="autoRefresh" checked /> Auto-refresh (10s)</label>
+    <span id="status">loading...</span>
+  </div>
+  <div id="network"></div>
+
+  <script>
+    const container = document.getElementById("network");
+    const statusEl = document.getElementById("status");
+    const autoRefreshEl = document.getElementById("autoRefresh");
+
+    const nodesDataSet = new vis.DataSet([]);
+    const edgesDataSet = new vis.DataSet([]);
+
+    const network = new vis.Network(
+      container,
+      { nodes: nodesDataSet, edges: edgesDataSet },
+      {
+        nodes: {
+          shape: "dot",
+          size: 14,
+          color: { background: "#4da3ff", border: "#2d6fb8" },
+          font: { color: "#e6e9ec" },
+        },
+        edges: {
+          color: { color: "#5b6573", highlight: "#4da3ff" },
+          font: { color: "#8b96a3", size: 11, strokeWidth: 0 },
+          smooth: { type: "dynamic" },
+        },
+        physics: { stabilization: true },
+        interaction: { hover: true },
+      }
+    );
+
+    function humanTime(unixSeconds) {
+      return new Date(unixSeconds * 1000).toLocaleString();
+    }
+
+    function edgeStyle(direction) {
+      if (direction === "bidirectional") {
+        return { arrows: { to: { enabled: true }, from: { enabled: true } }, color: { color: "#e0a030" } };
+      }
+      return { arrows: { to: { enabled: true } }, color: { color: "#5b6573" } };
+    }
+
+    async function refresh() {
+      try {
+        const res = await fetch("/api/graph");
+        const data = await res.json();
+
+        const nodes = data.nodes.map((n) => ({ id: n.id, label: n.label }));
+
+        const edges = data.edges.map((e, idx) => {
+          const style = edgeStyle(e.direction);
+          return {
+            id: idx,
+            from: e.from,
+            to: e.to,
+            label: e.label,
+            title:
+              `Packet Count: ${e.count}\n` +
+              `Protocol: ${e.protocol}\n` +
+              `Direction: ${e.direction}\n` +
+              `Last Seen: ${humanTime(e.last_seen)}`,
+            ...style,
+          };
+        });
+
+        nodesDataSet.clear();
+        nodesDataSet.add(nodes);
+        edgesDataSet.clear();
+        edgesDataSet.add(edges);
+
+        statusEl.textContent = `${nodes.length} nodes, ${edges.length} edges - updated ${new Date().toLocaleTimeString()}`;
+      } catch (err) {
+        statusEl.textContent = `error loading graph: ${err}`;
+      }
+    }
+
+    refresh();
+    setInterval(() => {
+      if (autoRefreshEl.checked) refresh();
+    }, 10000);
+  </script>
+</body>
+</html>

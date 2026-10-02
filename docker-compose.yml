@@ -1,0 +1,20 @@
+services:
+  dynamodb-local:
+    image: amazon/dynamodb-local:2.5.3
+    ports:
+      - "8000:8000"
+    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-inMemory"]
+
+  app:
+    build:
+      context: ./app
+    ports:
+      - "8080:80"
+    environment:
+      - DYNAMODB_ENDPOINT_URL=http://dynamodb-local:8000
+      - DYNAMODB_TABLE=vpc_flow_log_edges
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=local
+      - AWS_SECRET_ACCESS_KEY=local
+    depends_on:
+      - dynamodb-local
