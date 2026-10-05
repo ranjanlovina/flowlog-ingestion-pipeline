@@ -50,17 +50,49 @@ App VPC (flowlog-viz-app, 10.100.0.0/16, public subnet, IGW, no NAT, no ALB)
 - **`connection_id` = `primary_ip|secondary_ip|protocol`:** sorted IPs, port omitted, so both directions merge and bidirectional traffic can be detected (see PLAN.md decision 12).
 - **Short log retention** on the app's log group to avoid paying for logs nobody reads.
 
+## What the data showed
+
+The graph centers on one test EC2 instance (`172.31.44.107`) with **1,414 connections and ~77,000 packets**, almost all to public IPs I never contacted (ranges such as `35.203.x`, `162.216.x`, `147.185.x` and `198.235.x`, which are commonly internet scanners). A public IPv4 address gets probed constantly, and the flow log records every probe because it captures ALL traffic, including rejected packets. That explains why the data volume looked huge for an idle instance.
+
 ## Screenshots
 
-Add to `docs/screenshots/`:
+**Graph UI**
 
-- `01-graph.png`: the live graph with legend
-- `02-dynamodb-items.png`
-- `03-lambda-and-subscription-filter.png`
-- `04-flow-log-active.png`
-- `05-ecs-service-running.png`
-- `06-ecr-image.png`
-- `07-iam-roles.png`
+![Graph](screenshots/01-graph.png)
+![Graph with details panel](screenshots/02-graph-details.png)
+![Zoomed graph with IP labels](screenshots/10-graph-zoomed.png)
+
+**Ingestion pipeline**
+
+DynamoDB items (`connection_id`, `count`, `direction`):
+
+![DynamoDB items](screenshots/03-dynamodb-items.png)
+
+Lambda function with its CloudWatch Logs trigger:
+
+![Lambda](screenshots/04-lambda.png)
+
+Subscription filter on the flow log group:
+
+![Subscription filter](screenshots/05-subscription-filter.png)
+
+VPC flow log (Active, 1-minute aggregation):
+
+![Flow log](screenshots/06-flow-log.png)
+
+**Hosting and permissions**
+
+ECS Fargate service (1/1 tasks running):
+
+![ECS service](screenshots/07-ecs-service.png)
+
+ECR repository with the `latest` image:
+
+![ECR image](screenshots/08-ecr-image.png)
+
+Lambda execution role (scoped DynamoDB inline policy):
+
+![Lambda IAM role](screenshots/09-iam-lambda-role.png)
 
 ## Console vs Terraform
 

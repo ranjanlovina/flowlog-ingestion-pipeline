@@ -2,6 +2,12 @@
 
 Ingests AWS VPC Flow Logs in near real-time, deduplicates traffic between host pairs, and renders the result as an interactive, auto-refreshing network graph.
 
+![Network graph of VPC Flow Log traffic](docs/screenshots/01-graph.png)
+
+*Live graph from a real deployment: every dot is an IP address, every line is a connection. One EC2 instance (`172.31.44.107`) sits at the center, with 1,400+ internet hosts (likely scanners probing its public IP) connected to it. Click any node or line for details.*
+
+![Node details panel](docs/screenshots/02-graph-details.png)
+
 ## How it works
 
 1. **VPC Flow Logs** are enabled (traffic_type `ALL`) on every VPC ID you list, delivering to a per-VPC CloudWatch Log Group.
