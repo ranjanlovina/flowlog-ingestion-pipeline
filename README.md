@@ -13,6 +13,10 @@ Ingests AWS VPC Flow Logs in near real-time, deduplicates traffic between host p
 
 See [PLAN.md](PLAN.md) for the original spec and the full list of design decisions made while building this (including a real correctness bug found in the original `connection_id` design and how it was fixed).
 
+## Built manually in the AWS Console
+
+I also deployed this entire stack by hand in the AWS Console (no `terraform apply`) to learn how each service connects. See [MANUAL_CONSOLE_GUIDE.md](MANUAL_CONSOLE_GUIDE.md) for the steps and [docs/BUILD_LOG.md](docs/BUILD_LOG.md) for the build order, problems hit and design decisions.
+
 ## Prerequisites
 
 - An AWS account and credentials configured locally, with permission to create the resources below.

@@ -50,23 +50,68 @@
     width: 100%;
     height: calc(100vh - 46px);
   }
+  #topbar button {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  #panel {
+    position: fixed;
+    right: 12px;
+    bottom: 12px;
+    width: 260px;
+    padding: 10px 12px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.6;
+    z-index: 10;
+  }
+  #legend { padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid var(--border); }
+  #details { color: var(--muted); }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #4da3ff; }
+  .line { display: inline-block; width: 22px; height: 3px; vertical-align: middle; }
+  .line.gray { background: #5b6573; }
+  .line.orange { background: #e0a030; }
 </style>
 </head>
 <body>
   <div id="topbar">
     <h1>VPC Flow Log Network Graph</h1>
     <label><input type="checkbox" id="autoRefresh" checked /> Auto-refresh (10s)</label>
+    <button id="relayout">Re-layout</button>
     <span id="status">loading...</span>
   </div>
   <div id="network"></div>
+  <div id="panel">
+    <div id="legend">
+      <b>How to read this</b>
+      <div><span class="dot"></span> Node = one IP address</div>
+      <div><span class="line gray"></span> One-way traffic</div>
+      <div><span class="line orange"></span> Two-way traffic</div>
+      <div>Line label = total packets seen</div>
+    </div>
+    <div id="details">Click a node (IP) or a line (connection) to see details.</div>
+  </div>
 
   <script>
     const container = document.getElementById("network");
     const statusEl = document.getElementById("status");
     const autoRefreshEl = document.getElementById("autoRefresh");
 
+    const detailsEl = document.getElementById("details");
+    const relayoutBtn = document.getElementById("relayout");
+
     const nodesDataSet = new vis.DataSet([]);
     const edgesDataSet = new vis.DataSet([]);
+
+    const PROTOCOLS = { "1": "ICMP", "6": "TCP", "17": "UDP" };
+    const protoName = (p) => PROTOCOLS[String(p)] || `protocol ${p}`;
 
     const network = new vis.Network(
       container,
@@ -81,12 +126,20 @@
         edges: {
           color: { color: "#5b6573", highlight: "#4da3ff" },
           font: { color: "#8b96a3", size: 11, strokeWidth: 0 },
-          smooth: { type: "dynamic" },
+          smooth: false,
         },
-        physics: { stabilization: true },
-        interaction: { hover: true },
+        physics: {
+          solver: "forceAtlas2Based",
+          stabilization: { iterations: 200 },
+        },
+        interaction: { hover: true, tooltipDelay: 100 },
       }
     );
+
+    // Run the physics simulation once to lay the graph out, then freeze it so
+    // nodes stay put and are easy to click/drag. New nodes re-enable physics
+    // briefly (see refresh) and it freezes again after stabilizing.
+    network.on("stabilizationIterationsDone", () => network.setOptions({ physics: false }));
 
     function humanTime(unixSeconds) {
       return new Date(unixSeconds * 1000).toLocaleString();
@@ -99,6 +152,44 @@
       return { arrows: { to: { enabled: true } }, color: { color: "#5b6573" } };
     }
 
+    function showEdge(edge) {
+      detailsEl.innerHTML =
+        `<b>Connection</b><br>${edge.from} &harr; ${edge.to}<br>` +
+        `Protocol: ${edge.protocolName}<br>` +
+        `Direction: ${edge.direction}<br>` +
+        `Packets: ${edge.count}<br>` +
+        `Last seen: ${humanTime(edge.last_seen)}`;
+    }
+
+    function showNode(id) {
+      const connected = edgesDataSet.get().filter((e) => e.from === id || e.to === id);
+      const total = connected.reduce((sum, e) => sum + e.count, 0);
+      detailsEl.innerHTML =
+        `<b>IP address</b><br>${id}<br>` +
+        `Connections: ${connected.length}<br>` +
+        `Total packets: ${total}`;
+    }
+
+    network.on("click", (params) => {
+      if (params.nodes.length) showNode(params.nodes[0]);
+      else if (params.edges.length) showEdge(edgesDataSet.get(params.edges[0]));
+      else detailsEl.textContent = "Click a node (IP) or a line (connection) to see details.";
+    });
+
+    relayoutBtn.addEventListener("click", () => {
+      network.setOptions({ physics: { enabled: true } });
+      network.stabilize(200);
+    });
+
+    // Update the datasets in place instead of clear()+add(), so existing
+    // nodes keep their positions between refreshes.
+    function syncDataSet(dataSet, items) {
+      const incoming = new Set(items.map((i) => i.id));
+      const stale = dataSet.getIds().filter((id) => !incoming.has(id));
+      if (stale.length) dataSet.remove(stale);
+      dataSet.update(items);
+    }
+
     async function refresh() {
       try {
         const res = await fetch("/api/graph");
@@ -106,26 +197,34 @@
 
         const nodes = data.nodes.map((n) => ({ id: n.id, label: n.label }));
 
-        const edges = data.edges.map((e, idx) => {
+        const edges = data.edges.map((e) => {
           const style = edgeStyle(e.direction);
           return {
-            id: idx,
+            id: `${e.from}|${e.to}|${e.protocol}`,
             from: e.from,
             to: e.to,
             label: e.label,
+            count: e.count,
+            direction: e.direction,
+            last_seen: e.last_seen,
+            protocolName: protoName(e.protocol),
             title:
               `Packet Count: ${e.count}\n` +
-              `Protocol: ${e.protocol}\n` +
+              `Protocol: ${protoName(e.protocol)}\n` +
               `Direction: ${e.direction}\n` +
               `Last Seen: ${humanTime(e.last_seen)}`,
             ...style,
           };
         });
 
-        nodesDataSet.clear();
-        nodesDataSet.add(nodes);
-        edgesDataSet.clear();
-        edgesDataSet.add(edges);
+        const hadNewNodes = nodes.some((n) => !nodesDataSet.get(n.id));
+        syncDataSet(nodesDataSet, nodes);
+        syncDataSet(edgesDataSet, edges);
+
+        if (hadNewNodes) {
+          network.setOptions({ physics: { enabled: true } });
+          network.stabilize(200);
+        }
 
         statusEl.textContent = `${nodes.length} nodes, ${edges.length} edges - updated ${new Date().toLocaleTimeString()}`;
       } catch (err) {
